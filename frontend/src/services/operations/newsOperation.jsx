@@ -58,7 +58,7 @@ export const getUserNews = () => async (dispatch) => {
 export const deleteNewsItem = (id) => async (dispatch) => {
   try {
     toast.loading("Deleting...", { id: "del" });
-    await apiConnector("DELETE", `/api/news/history/${id}`);
+    await apiConnector("DELETE", `/news/history/${id}`);
     toast.success("Deleted!", { id: "del" });
     dispatch(getUserNews());
   } catch {
@@ -70,7 +70,7 @@ export const deleteNewsItem = (id) => async (dispatch) => {
 export const clearAllNews = () => async (dispatch) => {
   try {
     toast.loading("Clearing...", { id: "clear" });
-    await apiConnector("DELETE", `/api/news/history`);
+    await apiConnector("DELETE", `/news/history`);
     toast.success("History cleared!", { id: "clear" });
     dispatch(getUserNews());
   } catch {
