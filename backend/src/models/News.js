@@ -1,11 +1,56 @@
-// models/NewsCheck.js
 import mongoose from "mongoose";
 
-const newsCheckSchema = new mongoose.Schema({
-  text: { type: String, required: true },
-  prediction: { type: String, required: true },
-  confidence: { type: Number },
-  createdAt: { type: Date, default: Date.now },
-});
+const newsSchema = new mongoose.Schema(
+  {
+    userId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "User", 
+      required: true,
+      index: true 
+    },
 
-export const NewsCheck = mongoose.model("NewsCheck", newsCheckSchema);
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 2,
+      maxlength: 200,
+    },
+
+    date: {
+      type: Date,
+      required: true,
+    },
+
+    subject: {
+      type: String,
+      required: true,
+      trim: true,
+      default: "News"
+    },
+
+    text: { 
+      type: String, 
+      required: true,
+      trim: true,
+      minlength: 10,
+    },
+
+    prediction: { 
+      type: String,
+      enum: ["real", "fake", "unknown"], 
+      default: "unknown" 
+    },
+
+    confidence: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 1,
+    }
+  },
+
+  { timestamps: true } // ✅ adds createdAt + updatedAt
+);
+
+export const NewsCheck = mongoose.model("NewsCheck", newsSchema);
