@@ -1,26 +1,43 @@
 import axios from "axios";
 import { NewsCheck } from "../models/News.js";
 
-// ✅ Check News + Save
+// ✅ Check News + Save full form
 export const checkNews = async (req, res) => {
   try {
-    const { text } = req.body;
+    const { title, date, subject, text } = req.body;
     const userId = req.user?.id;
 
-    if (!text) {
-      return res.status(400).json({ success: false, message: "No text provided." });
+    // Validate required fields
+    if (!title || !date || !subject || !text) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields (title, date, subject, text) are required",
+      });
     }
 
-    const pythonApiUrl = process.env.PYTHON_API_URL || "http://127.0.0.1:5000/predict";
-    const pythonResponse = await axios.post(pythonApiUrl, { text });
+    if (text.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Text must be at least 10 characters",
+      });
+    }
 
-    const prediction = pythonResponse.data;
+    // Call Python API
+    const pythonApiUrl = process.env.PYTHON_API_URL;
+    const py = await axios.post(pythonApiUrl, { text });
 
+    const prediction = (py.data.label || py.data.prediction || "unknown").toLowerCase();
+    const confidence = py.data.confidence ?? null;
+
+    // ✅ Save all fields
     const saved = await NewsCheck.create({
       userId,
+      title,
+      date,
+      subject,
       text,
-      prediction: prediction?.label || prediction.prediction,
-      confidence: prediction?.confidence,
+      prediction,
+      confidence,
     });
 
     res.status(200).json({ success: true, data: saved });
@@ -33,7 +50,7 @@ export const checkNews = async (req, res) => {
   }
 };
 
-// ✅ Fetch user history
+// ✅ Fetch User History
 export const getUserNews = async (req, res) => {
   try {
     const news = await NewsCheck.find({ userId: req.user.id }).sort({ createdAt: -1 });
@@ -61,7 +78,7 @@ export const deleteUserNews = async (req, res) => {
   }
 };
 
-// ✅ Clear user history
+// ✅ Clear history
 export const clearUserNews = async (req, res) => {
   try {
     await NewsCheck.deleteMany({ userId: req.user.id });
