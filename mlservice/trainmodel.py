@@ -1,85 +1,94 @@
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import PassiveAggressiveClassifier
-from sklearn.model_selection import train_test_split
-import joblib
 import os
 import re
+import joblib
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import PassiveAggressiveClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
-print("Starting model training script...")
-
-# --- IMPORTANT ---
-# Make sure your CSV files have a column named 'text'.
-# If not, change 'text' in the code below to your column's name.
+# -------------------------------
+# Configurations
+# -------------------------------
 TEXT_COLUMN_NAME = 'text'
+FAKE_CSV = "Fake (2).csv"
+REAL_CSV = "True (2).csv"
+MODEL_FILE = "model.pkl"
+VECTORIZER_FILE = "vectorizer.pkl"
 
-# Step 1: Load the datasets
-try:
-    fake_df = pd.read_csv("Fake (2).csv")
-    real_df = pd.read_csv("True (2).csv")
-    print("Successfully loaded fake.csv and real.csv")
-except FileNotFoundError:
-    print("Error: fake.csv or real.csv not found.")
-    print("Please make sure they are in the 'ml-service' folder.")
-    exit()
-except Exception as e:
-    print(f"Error loading CSVs: {e}")
-    print(f"Please check that your CSV files have a '{TEXT_COLUMN_NAME}' column.")
-    exit()
-
-# Step 2: Add labels
-fake_df['label'] = 'FAKE'
-real_df['label'] = 'REAL'
-print("Added 'label' column to dataframes.")
-
-# Step 3: Combine the datasets
-# We use ignore_index=True to reset the index
-df = pd.concat([fake_df, real_df], ignore_index=True)
-
-# Step 4: Clean and preprocess the data
-# Dropping any rows that might be missing text
-df = df.dropna(subset=[TEXT_COLUMN_NAME])
-# Simple text cleaning function (optional, but recommended)
-def clean_text(text):
-    text = text.lower()
-    text = re.sub(r'\[.*?\]', '', text) # remove text in square brackets
-    text = re.sub(r'\W', ' ', text)     # remove special chars
-    text = re.sub(r'httpsS?://\S+|www\.\S+', '', text) # remove URLs
-    text = re.sub(r'<.*?>+', '', text)  # remove HTML tags
-    text = re.sub(r'\n', '', text)      # remove newlines
+# -------------------------------
+# Helper Functions
+# -------------------------------
+def clean_text(text: str) -> str:
+    """Clean and normalize input text."""
+    text = str(text).lower()
+    text = re.sub(r'\[.*?\]', '', text)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'<.*?>+', '', text)
+    text = re.sub(r'[^a-z\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
-print("Cleaning text data...")
-df[TEXT_COLUMN_NAME] = df[TEXT_COLUMN_NAME].apply(clean_text)
 
-# Step 5: Define features (X) and labels (y)
-X = df[TEXT_COLUMN_NAME]
-y = df['label']
+def load_data(fake_path: str, real_path: str) -> pd.DataFrame:
+    """Load and label datasets."""
+    if not os.path.exists(fake_path) or not os.path.exists(real_path):
+        raise FileNotFoundError("Missing Fake or True CSV files.")
+    fake_df = pd.read_csv(fake_path)
+    real_df = pd.read_csv(real_path)
+    fake_df["label"] = "FAKE"
+    real_df["label"] = "REAL"
+    return pd.concat([fake_df, real_df], ignore_index=True)
 
-# Step 6: Split the data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-print(f"Data split into {len(X_train)} training samples and {len(X_test)} testing samples.")
 
-# Step 7: Initialize and fit the TF-IDF Vectorizer
-# This converts all text into numerical features
-tfidf_vectorizer = TfidfVectorizer(stop_words='english', max_df=0.7)
-tfidf_train = tfidf_vectorizer.fit_transform(X_train)
-print("TF-IDF Vectorizer created and fitted to training data.")
+def train_model(df: pd.DataFrame):
+    """Train model and return classifier and vectorizer."""
+    df = df.dropna(subset=[TEXT_COLUMN_NAME])
+    df[TEXT_COLUMN_NAME] = df[TEXT_COLUMN_NAME].apply(clean_text)
 
-# Step 8: Initialize and train the classifier
-# PassiveAggressiveClassifier is fast and good for text
-pac = PassiveAggressiveClassifier(max_iter=50)
-pac.fit(tfidf_train, y_train)
-print("Model (PassiveAggressiveClassifier) trained.")
+    X = df[TEXT_COLUMN_NAME]
+    y = df["label"]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Step 9: Save the model and the vectorizer to disk
-model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
-vectorizer_path = os.path.join(os.path.dirname(__file__), 'vectorizer.pkl')
+    print(f"🧠 Training data: {len(X_train)} samples | Test data: {len(X_test)} samples")
 
-joblib.dump(pac, model_path)
-joblib.dump(tfidf_vectorizer, vectorizer_path)
+    vectorizer = TfidfVectorizer(stop_words="english", max_df=0.7)
+    X_train_tfidf = vectorizer.fit_transform(X_train)
+    X_test_tfidf = vectorizer.transform(X_test)
 
-print(f"\nTraining complete!")
-print(f"Model saved to: {model_path}")
-print(f"Vectorizer saved to: {vectorizer_path}")
+    classifier = PassiveAggressiveClassifier(max_iter=50)
+    classifier.fit(X_train_tfidf, y_train)
 
+    # Evaluate
+    y_pred = classifier.predict(X_test_tfidf)
+    accuracy = accuracy_score(y_test, y_pred)
+    print(f"✅ Model Accuracy: {accuracy * 100:.2f}%")
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+
+    return classifier, vectorizer
+
+
+def save_model(model, vectorizer, output_dir="."):
+    """Save model and vectorizer as .pkl files."""
+    os.makedirs(output_dir, exist_ok=True)
+    model_path = os.path.join(output_dir, MODEL_FILE)
+    vect_path = os.path.join(output_dir, VECTORIZER_FILE)
+    joblib.dump(model, model_path)
+    joblib.dump(vectorizer, vect_path)
+    print(f"💾 Model saved to {model_path}")
+    print(f"💾 Vectorizer saved to {vect_path}")
+
+
+# -------------------------------
+# Main Script
+# -------------------------------
+if __name__ == "__main__":
+    print("🚀 Starting model training...")
+    try:
+        data = load_data(FAKE_CSV, REAL_CSV)
+        model, vectorizer = train_model(data)
+        save_model(model, vectorizer, output_dir=os.path.dirname(__file__))
+        print("🎉 Training complete!")
+    except Exception as e:
+        print(f"❌ Error: {e}")
