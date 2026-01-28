@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { checkNews } from "../services/operations/newsOperation";
 import { motion, AnimatePresence } from "framer-motion";
+import toast from "react-hot-toast";
 
 const Home = () => {
   const dispatch = useDispatch();
-  const { result } = useSelector((state) => state.news);
+  const { result, loading } = useSelector((state) => state.news);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -13,7 +14,7 @@ const Home = () => {
     subject: "News",
     text: "",
   });
-  const [loading, setLoading] = useState(false);
+
   const [showModal, setShowModal] = useState(false);
 
   const handleChange = (e) => {
@@ -23,40 +24,32 @@ const Home = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (
-      !formData.text.trim() ||
-      !formData.title.trim() ||
-      !formData.date ||
-      !formData.subject
-    ) {
-      alert("Please enter valid details in all fields.");
-      return;
-    }
 
-    setLoading(true);
-    try {
-      await dispatch(checkNews(formData));
+    // ✅ better validation
+    if (!formData.title.trim()) return toast.error("Please enter a title.");
+    if (!formData.date) return toast.error("Please select a date.");
+    if (!formData.text.trim()) return toast.error("Please enter news content.");
+
+    const promise = dispatch(checkNews(formData));
+
+    promise.then(() => {
       setShowModal(true);
-    } catch (error) {
-      console.error("Error checking news:", error);
-      alert("Failed to analyze news. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    }).catch(() => {
+      toast.error("News analysis failed");
+    });
   };
 
   const label = result?.prediction?.toLowerCase();
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6 py-10">
-      {/* Container */}
       <motion.div
         className="w-full max-w-6xl bg-gradient-to-br from-slate-900 via-slate-900/95 to-slate-950 border border-slate-800 rounded-3xl shadow-2xl flex flex-col lg:flex-row items-center lg:items-stretch overflow-hidden"
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7 }}
       >
-        {/* LEFT: Intro */}
+        {/* LEFT INTRO */}
         <div className="lg:w-1/2 w-full p-10 flex flex-col justify-center space-y-6 bg-slate-900/50 backdrop-blur-sm">
           <motion.h1
             initial={{ opacity: 0, y: -15 }}
@@ -68,23 +61,16 @@ const Home = () => {
           </motion.h1>
 
           <p className="text-gray-400 text-lg max-w-md leading-relaxed">
-            Stop misinformation in its tracks. Enter article details below, and
-            let our AI analyze it in seconds to determine whether it’s{" "}
-            <span className="text-green-400 font-semibold">Real</span> or{" "}
-            <span className="text-red-400 font-semibold">Fake</span>.
+            Stop misinformation in its tracks. Enter article details below, and let our AI analyze it in seconds.
           </p>
 
-          <div className="flex space-x-3 pt-3">
-            <span className="text-sm text-gray-500">
-              ⚡ AI-powered Detection
-            </span>
-            <span className="text-sm text-gray-500">
-              🧩 NLP Model Integration
-            </span>
+          <div className="flex space-x-3 pt-3 text-gray-500 text-sm">
+            <span>⚡ AI-powered Detection</span>
+            <span>🧩 NLP Model Integration</span>
           </div>
         </div>
 
-        {/* RIGHT: Form */}
+        {/* RIGHT FORM */}
         <motion.form
           onSubmit={handleSubmit}
           className="lg:w-1/2 w-full bg-slate-900/80 p-10 flex flex-col justify-center space-y-5"
@@ -119,10 +105,12 @@ const Home = () => {
               className="w-full sm:w-1/2 p-3 rounded-lg bg-slate-800 text-gray-100 focus:ring-2 focus:ring-blue-500"
             >
               <option value="News">News</option>
+              <option value="Social Media">Social Media</option>
+              <option value="WhatsApp Forward">WhatsApp Forward</option>
             </select>
           </div>
 
-          {/* Description */}
+          {/* Text */}
           <textarea
             name="text"
             value={formData.text}
@@ -132,23 +120,19 @@ const Home = () => {
           />
 
           {/* Submit */}
-          <div className="flex justify-center mt-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className={`px-8 py-3 rounded-lg font-semibold text-lg transition-all ${
-                loading
-                  ? "bg-blue-400 cursor-not-allowed"
-                  : "bg-blue-500 hover:bg-blue-600"
-              }`}
-            >
-              {loading ? "Analyzing..." : "Analyze?"}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`px-8 py-3 rounded-lg font-semibold text-lg transition-all ${
+              loading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
+            }`}
+          >
+            {loading ? "Analyzing..." : "Analyze"}
+          </button>
         </motion.form>
       </motion.div>
 
-      {/* Result Modal */}
+      {/* Modal */}
       <AnimatePresence>
         {showModal && result && (
           <motion.div
@@ -163,7 +147,6 @@ const Home = () => {
               }`}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
             >
               <h2
                 className={`text-3xl font-bold mb-4 ${
@@ -173,33 +156,22 @@ const Home = () => {
                 {result.prediction} News
               </h2>
 
-              {result.confidence !== undefined && (
+              {result?.confidence && (
                 <p className="text-gray-300 mb-4">
                   Confidence: {(result.confidence * 100).toFixed(1)}%
                 </p>
               )}
 
               <div className="text-gray-400 text-sm mb-6 space-y-1">
-                <p>
-                  <strong>Title:</strong> {formData.title || "N/A"}
-                </p>
-                <p>
-                  <strong>Date:</strong> {formData.date || "N/A"}
-                </p>
-                <p>
-                  <strong>Subject:</strong> {formData.subject}
-                </p>
+                <p><strong>Title:</strong> {formData.title}</p>
+                <p><strong>Date:</strong> {formData.date}</p>
+                <p><strong>Subject:</strong> {formData.subject}</p>
               </div>
 
               <button
                 onClick={() => {
                   setShowModal(false);
-                  setFormData({
-                    title: "",
-                    date: "",
-                    subject: "News",
-                    text: "",
-                  });
+                  setFormData({ title: "", date: "", subject: "News", text: "" });
                 }}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold transition-all"
               >

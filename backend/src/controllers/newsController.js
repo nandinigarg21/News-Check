@@ -1,43 +1,89 @@
-// controllers/newsController.js
 import axios from "axios";
+import { NewsCheck } from "../models/News.js";
 
+// ✅ Check News + Save full form
 export const checkNews = async (req, res) => {
   try {
-    const { text } = req.body;
+    const { title, date, subject, text } = req.body;
+    const userId = req.user?.id;
 
-    if (!text) {
-      return res.status(400).json({ success: false, message: "No text provided." });
-    }
-
-    console.log("Forwarding request to Python ML service...");
-
-    const pythonApiUrl = process.env.PYTHON_API_URL || "http://127.0.0.1:5000/predict";
-    const pythonResponse = await axios.post(pythonApiUrl, { text });
-
-    const prediction = pythonResponse.data;
-    console.log("Received prediction:", prediction);
-
-    // Optional: save result to MongoDB
-    // await NewsCheck.create({ text, ...prediction });
-
-    res.status(200).json({
-      success: true,
-      data: prediction,
-    });
-  } catch (error) {
-    console.error("Error in checkNews controller:", error.message);
-
-    if (error.code === "ECONNREFUSED") {
-      return res.status(500).json({
+    // Validate required fields
+    if (!title || !date || !subject || !text) {
+      return res.status(400).json({
         success: false,
-        message: "Could not connect to the Python ML service. Is it running?",
+        message: "All fields (title, date, subject, text) are required",
       });
     }
 
+    if (text.length < 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Text must be at least 10 characters",
+      });
+    }
+
+    // Call Python API
+    const pythonApiUrl = process.env.PYTHON_API_URL;
+    const py = await axios.post(pythonApiUrl, { text });
+
+    const prediction = (py.data.label || py.data.prediction || "unknown").toLowerCase();
+    const confidence = py.data.confidence ?? null;
+
+    // ✅ Save all fields
+    const saved = await NewsCheck.create({
+      userId,
+      title,
+      date,
+      subject,
+      text,
+      prediction,
+      confidence,
+    });
+
+    res.status(200).json({ success: true, data: saved });
+  } catch (error) {
     res.status(500).json({
       success: false,
-      message: "An error occurred while processing the request.",
-      error:error.message
+      message: "Error checking news",
+      error: error.message,
     });
+  }
+};
+
+// ✅ Fetch User History
+export const getUserNews = async (req, res) => {
+  try {
+    const news = await NewsCheck.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    res.status(200).json({ success: true, data: news });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to fetch history", error: error.message });
+  }
+};
+
+// ✅ Delete single record
+export const deleteUserNews = async (req, res) => {
+  try {
+    const deleted = await NewsCheck.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: "Record not found" });
+    }
+
+    res.json({ success: true, message: "Deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to delete", error: error.message });
+  }
+};
+
+// ✅ Clear history
+export const clearUserNews = async (req, res) => {
+  try {
+    await NewsCheck.deleteMany({ userId: req.user.id });
+    res.json({ success: true, message: "All history cleared" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to clear history", error: error.message });
   }
 };

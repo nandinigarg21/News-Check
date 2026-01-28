@@ -1,62 +1,73 @@
-import { toast } from "react-hot-toast";
-import { endPoints } from "../apis";
-import  apiConnector  from "../../utils/apiConnector";
-import { setUser, setToken } from "../../redux/slices/userSlice"; // match your actual slice name
+// src/services/operations/authOperation.js
+import toast from "react-hot-toast";
+import { AUTH } from "../apis";
+import apiConnector from "../../utils/apiConnector";
 
-// ───────────────────────────────
+import {
+  authStart,
+  setUser,
+  authFail,
+  logout,
+} from "../../redux/slices/userSlice";
+
+// =====================================================
 // REGISTER
-// ───────────────────────────────
-export function signUp(formData, navigate) {
-  return async (dispatch) => {
-    try {
-      const response = await apiConnector("POST", endPoints.REGISTER, formData);
+// =====================================================
+export const signUp = (formData, navigate) => async (dispatch) => {
+  dispatch(authStart());
+  const toastId = toast.loading("Creating your account...");
 
-      if (!response?.data?.success) {
-        throw new Error(response.data.message);
-      }
+  try {
+    const response = await apiConnector("POST", AUTH.REGISTER, formData);
 
-      const { user, token } = response.data;
-
-      dispatch(setUser(user));
-      dispatch(setToken(token));
-
-      localStorage.setItem("user", JSON.stringify(user));
-      localStorage.setItem("token", token);
-
-      toast.success("Signup successful!");
-      navigate("/");
-    } catch (error) {
-      console.error("Signup failed:", error);
-      toast.error(error?.response?.data?.message || "Signup failed");
+    if (!response?.data?.success) {
+      throw new Error(response?.data?.message || "Signup failed");
     }
-  };
-}
 
-// ───────────────────────────────
+    const { user, token } = response.data;
+
+    dispatch(setUser({ user, token }));
+
+    toast.success("Signup successful 🎉", { id: toastId });
+    navigate("/main");
+  } catch (error) {
+    const msg = error?.response?.data?.message || "Signup failed";
+    dispatch(authFail(msg));
+    toast.error(msg, { id: toastId });
+  }
+};
+
+// =====================================================
 // LOGIN
-// ───────────────────────────────
-export function login(formData, navigate) {
-  return async (dispatch) => {
-    try {
-      const response = await apiConnector("POST", endPoints.LOGIN, formData);
+// =====================================================
+export const login = (formData, navigate) => async (dispatch) => {
+  dispatch(authStart());
+  const toastId = toast.loading("Logging in...");
 
-      if (!response?.data?.success) {
-        throw new Error(response.data.message);
-      }
+  try {
+    const response = await apiConnector("POST", AUTH.LOGIN, formData);
 
-      const { user, token } = response.data;
-
-      dispatch(setUser(user));
-      dispatch(setToken(token));
-
-      localStorage.setItem("user", JSON.stringify(user));
-      localStorage.setItem("token", token);
-
-      toast.success("Login successful!");
-      navigate("/");
-    } catch (error) {
-      console.error("Login failed:", error);
-      toast.error(error?.response?.data?.message || "Login failed");
+    if (!response?.data?.success) {
+      throw new Error(response.data.message);
     }
-  };
-}
+
+    const { user, token } = response.data;
+
+    dispatch(setUser({ user, token }));
+
+    toast.success("Welcome back 👋", { id: toastId });
+    navigate("/main");
+  } catch (error) {
+    const msg = error?.response?.data?.message || "Login failed";
+    dispatch(authFail(msg));
+    toast.error(msg, { id: toastId });
+  }
+};
+
+// =====================================================
+// LOGOUT (Optional finish)
+// =====================================================
+export const logoutUser = () => (dispatch) => {
+  dispatch(logout());
+  toast.success("Logged out successfully");
+};

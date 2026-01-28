@@ -1,16 +1,21 @@
 import React, { useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
-import { login } from "../services/operations/authOperation"; // corrected import path
+import { login } from "../services/operations/authOperation";
+import toast from "react-hot-toast";
 
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
+  const { loading } = useSelector((state) => state.user);
+
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
+
+  const [showPass, setShowPass] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -21,17 +26,11 @@ const Login = () => {
 
     const { username, password } = formData;
 
-    if (!username || !password) {
-      alert("Please fill all fields");
-      return;
-    }
+    // ✅ Validations
+    if (!username.trim()) return toast.error("Username is required");
+    if (!password.trim()) return toast.error("Password is required");
 
-    try {
-      await dispatch(login(formData, navigate));
-    } catch (error) {
-      console.error("Error during login:", error);
-      alert("Login failed. Please try again.");
-    }
+    dispatch(login(formData, navigate)); 
   };
 
   return (
@@ -53,24 +52,39 @@ const Login = () => {
             />
           </div>
 
-          {/* Password */}
+          {/* Password + Toggle */}
           <div>
             <label className="block mb-1 text-gray-400">Password</label>
-            <input
-              type="password"
-              name="password"
-              className="w-full p-3 rounded-lg bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your password"
-              onChange={handleChange}
-              value={formData.password}
-            />
+            <div className="relative">
+              <input
+                type={showPass ? "text" : "password"}
+                name="password"
+                className="w-full p-3 rounded-lg bg-slate-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 pr-12"
+                placeholder="Enter your password"
+                onChange={handleChange}
+                value={formData.password}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+              >
+                {showPass ? "🙈" : "👁️"}
+              </button>
+            </div>
           </div>
 
+          {/* Submit */}
           <button
             type="submit"
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-lg font-semibold transition-all mt-4"
+            disabled={loading}
+            className={`w-full py-3 rounded-lg font-semibold transition-all mt-4 ${
+              loading
+                ? "bg-blue-400 cursor-not-allowed"
+                : "bg-blue-500 hover:bg-blue-600"
+            }`}
           >
-            Login
+            {loading ? "Logging in..." : "Login"}
           </button>
         </form>
 
